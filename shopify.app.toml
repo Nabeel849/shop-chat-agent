@@ -2,11 +2,12 @@
 
 client_id = "dff41e558c0d13d0ae448bfb60d221de"
 name = "shop-chat-agent"
-handle = "shop-chat-agent"
+handle = "shop-chat-agent-143"
 application_url = "https://shop-chat-agent-production.up.railway.app"
 embedded = true
 
 [build]
+automatically_update_urls_on_dev = true
 include_config_on_deploy = true
 
 [webhooks]
@@ -17,12 +18,11 @@ api_version = "2025-04"
 scopes = "customer_read_customers,customer_read_orders,customer_read_store_credit_account_transactions,customer_read_store_credit_accounts,unauthenticated_read_product_listings"
 
 [auth]
-redirect_urls = [ "https://shop-chat-agent-production.up.railway.app/api/auth" ]
+redirect_urls = [
+  "https://shop-chat-agent-production.up.railway.app/auth/callback",
+  "https://shop-chat-agent-production.up.railway.app/auth/shopify/callback",
+  "https://shop-chat-agent-production.up.railway.app/api/auth/callback"
+]
 
 [pos]
 embedded = false
-
-[mcp.customer_authentication]
-redirect_uris = [
-  "https://shop-chat-agent-production.up.railway.app/callback"
-]
