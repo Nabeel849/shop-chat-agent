@@ -408,7 +408,7 @@
             prompt_type: promptType
           });
 
-          const streamUrl = 'https://localhost:3458/chat';
+          const streamUrl = 'https://shop-chat-agent-production.up.railway.app/chat';
           const shopId = window.shopId;
 
           const response = await fetch(streamUrl, {
