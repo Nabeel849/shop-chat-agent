@@ -1,162 +1,95 @@
+/**
+ * Claude Service
+ * Manages interactions with the Claude API
+ */
 import { Anthropic } from "@anthropic-ai/sdk";
+import fs from "fs";
+import path from "path";
+import { parse } from "csv-parse/sync";
 import AppConfig from "./config.server";
 import systemPrompts from "../prompts/prompts.json";
-import fs from "fs/promises";
-import path from "path";
-import { parse as csvParse } from "csv-parse/sync";
+
+// Load B Fresh Gear knowledge base JSON
+const knowledgeBasePath = path.resolve("../data/knowledge-base/breshgear_knowledge_base.json");
+const knowledgeBaseRaw = fs.readFileSync(knowledgeBasePath, "utf-8");
+const breshgearKnowledgeBase = JSON.parse(knowledgeBaseRaw);
+
+// Load and parse products_export_1.csv
+const productsCSVPath = path.resolve("../data/knowledge-base/products_export_1.csv");
+const productsCSVRaw = fs.readFileSync(productsCSVPath, "utf-8");
+const productsData = parse(productsCSVRaw, {
+  columns: true,
+  skip_empty_lines: true
+});
+
+// Load and parse customers_export_segmented.csv
+const customersCSVPath = path.resolve("../data/knowledge-base/customers_export_segmented.csv");
+const customersCSVRaw = fs.readFileSync(customersCSVPath, "utf-8");
+const customersData = parse(customersCSVRaw, {
+  columns: true,
+  skip_empty_lines: true
+});
 
 /**
- * Reads the knowledge base content from file.
- * @returns {Promise<string>}
- */
-async function loadKnowledgeBaseMarkdown() {
-  const kbPath = path.resolve(process.cwd(), "../../data/knowledge-base/B_Fresh_Gear_Claude_AI_Prompt.txt");
-  try {
-    const mdContent = await fs.readFile(kbPath, "utf-8");
-    return mdContent;
-  } catch (err) {
-    console.error("Error loading knowledge base:", err);
-    return "";
-  }
-}
-
-/**
- * Reads and parses CSV files to create context text.
- * @param {string[]} csvFilePaths 
- * @returns {Promise<string>}
- */
-async function loadAndFormatCSVContext(csvFilePaths = []) {
-  let combinedContext = "";
-
-  for (const filePath of csvFilePaths) {
-    try {
-      const absPath = path.resolve(process.cwd(), filePath);
-      const csvRaw = await fs.readFile(absPath, "utf-8");
-      const records = csvParse(csvRaw, { columns: true });
-
-      combinedContext += `\n\nData from ${path.basename(filePath)}:\n`;
-
-      records.forEach((row, i) => {
-        combinedContext += `\n- Entry ${i + 1}:\n`;
-        for (const [key, value] of Object.entries(row)) {
-          combinedContext += `  - ${key}: ${value}\n`;
-        }
-      });
-    } catch (err) {
-      console.error(`Error reading/parsing CSV file ${filePath}:`, err);
-    }
-  }
-
-  return combinedContext;
-}
-
-/**
- * Reads and parses JSON knowledge base.
- * @param {string} jsonFilePath 
- * @returns {Promise<Object[] | null>}
- */
-async function loadJsonKnowledgeBase(jsonFilePath) {
-  try {
-    const absPath = path.resolve(process.cwd(), jsonFilePath);
-    const jsonData = await fs.readFile(absPath, "utf-8");
-    return JSON.parse(jsonData);
-  } catch (err) {
-    console.error(`Error loading JSON knowledge base from ${jsonFilePath}:`, err);
-    return null;
-  }
-}
-
-/**
- * Formats JSON knowledge base data into readable text.
- * @param {Object[]} jsonData 
- * @returns {string}
- */
-function formatJsonContext(jsonData) {
-  if (!jsonData) return "";
-
-  let context = "\n\nAdditional JSON Knowledge Base:\n";
-  jsonData.forEach((item, i) => {
-    context += `\n- Entry ${i + 1}:\n`;
-    for (const [key, val] of Object.entries(item)) {
-      context += `  - ${key}: ${val}\n`;
-    }
-  });
-  return context;
-}
-
-/**
- * Creates Claude service instance.
- * @param {string} apiKey 
- * @returns {Object}
+ * Creates a Claude service instance
+ * @param {string} apiKey - Claude API key
+ * @returns {Object} Claude service with methods for interacting with Claude API
  */
 export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
+  // Initialize Claude client
   const anthropic = new Anthropic({ apiKey });
 
   /**
-   * Get the system prompt content for a given prompt type
-   * Inject knowledge base markdown, CSV context and JSON context if needed
-   * @param {string} promptType 
-   * @param {string[]} csvFiles 
-   * @param {string} jsonFilePath
-   * @returns {Promise<string>}
-   */
-  const getSystemPrompt = async (promptType, csvFiles = [], jsonFilePath = "") => {
-    let basePrompt = systemPrompts.systemPrompts[promptType]?.content || 
-      systemPrompts.systemPrompts[AppConfig.api.defaultPromptType].content;
-
-    if (promptType === "knowledgeBaseAssistant") {
-      const kbMd = await loadKnowledgeBaseMarkdown();
-      basePrompt = kbMd || basePrompt;
-
-      if (csvFiles.length === 0) {
-        // Default CSV files if none specified
-        csvFiles = [
-          "../../data/knowledge-base/customers_export_segmented.csv",
-          "../../data/knowledge-base/products_export_1.csv"
-        ];
-      }
-
-      const csvContext = await loadAndFormatCSVContext(csvFiles);
-      basePrompt += `\n\n---\n\nAdditional context from CSV data:${csvContext}`;
-
-      if (jsonFilePath) {
-        const jsonKB = await loadJsonKnowledgeBase(jsonFilePath);
-        const jsonContext = formatJsonContext(jsonKB);
-        basePrompt += jsonContext;
-      }
-    }
-
-    return basePrompt;
-  };
-
-  /**
-   * Stream conversation with Claude
-   * @param {Object} params 
-   * @param {Array} params.messages
-   * @param {string} params.promptType
-   * @param {Array} params.tools
-   * @param {string[]} params.csvFiles
-   * @param {string} params.jsonFilePath
-   * @param {Object} streamHandlers
-   * @returns {Promise<Object>}
+   * Streams a conversation with Claude
+   * @param {Object} params - Stream parameters
+   * @param {Array} params.messages - Conversation history
+   * @param {string} params.promptType - The type of system prompt to use
+   * @param {Array} params.tools - Available tools for Claude
+   * @param {Object} streamHandlers - Stream event handlers
+   * @param {Function} streamHandlers.onText - Handles text chunks
+   * @param {Function} streamHandlers.onMessage - Handles complete messages
+   * @param {Function} streamHandlers.onToolUse - Handles tool use requests
+   * @returns {Promise<Object>} The final message
    */
   const streamConversation = async ({
     messages,
     promptType = AppConfig.api.defaultPromptType,
-    tools,
-    csvFiles = [],
-    jsonFilePath = ""
+    tools = []
   }, streamHandlers) => {
-    const systemInstruction = await getSystemPrompt(promptType, csvFiles, jsonFilePath);
+    // Get system prompt from configuration or use default
+    const systemInstruction = getSystemPrompt(promptType);
 
+    // Inject B Fresh Gear knowledge base and CSV data as extra context or tools
+    // You can customize this embedding depending on your system needs
+    const enhancedTools = [
+      ...tools,
+      {
+        name: "breshgear_knowledge_base",
+        description: "Knowledge base for B Fresh Gear brand, products, and policies.",
+        content: JSON.stringify(breshgearKnowledgeBase)
+      },
+      {
+        name: "products_data",
+        description: "CSV data for products export from B Fresh Gear store.",
+        content: JSON.stringify(productsData)
+      },
+      {
+        name: "customers_segmented_data",
+        description: "CSV data for segmented customers from B Fresh Gear store.",
+        content: JSON.stringify(customersData)
+      }
+    ];
+
+    // Create stream
     const stream = await anthropic.messages.stream({
       model: AppConfig.api.defaultModel,
       max_tokens: AppConfig.api.maxTokens,
       system: systemInstruction,
       messages,
-      tools: tools && tools.length > 0 ? tools : undefined,
+      tools: enhancedTools.length > 0 ? enhancedTools : undefined
     });
 
+    // Set up event handlers
     if (streamHandlers.onText) {
       stream.on("text", streamHandlers.onText);
     }
@@ -165,8 +98,10 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
       stream.on("message", streamHandlers.onMessage);
     }
 
+    // Wait for final message
     const finalMessage = await stream.finalMessage();
 
+    // Process tool use requests
     if (streamHandlers.onToolUse && finalMessage.content) {
       for (const content of finalMessage.content) {
         if (content.type === "tool_use") {
@@ -178,12 +113,24 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
     return finalMessage;
   };
 
+  /**
+   * Gets the system prompt content for a given prompt type
+   * @param {string} promptType - The prompt type to retrieve
+   * @returns {string} The system prompt content
+   */
+  const getSystemPrompt = (promptType) => {
+    return (
+      systemPrompts.systemPrompts[promptType]?.content ||
+      systemPrompts.systemPrompts[AppConfig.api.defaultPromptType].content
+    );
+  };
+
   return {
     streamConversation,
-    getSystemPrompt,
+    getSystemPrompt
   };
 }
 
 export default {
-  createClaudeService,
+  createClaudeService
 };
