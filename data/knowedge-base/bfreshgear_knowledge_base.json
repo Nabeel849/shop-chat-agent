@@ -1,0 +1,83 @@
+{
+  "title": "B Fresh Gear - Claude AI Knowledge Base",
+  "categories": {
+    "Bodywear": [
+      "Swimwear",
+      "Stretch Shirts",
+      "Fanny Breakers",
+      "T-Shirts & Tanks",
+      "Vests",
+      "Hoodies",
+      "Pearl Snaps",
+      "Snow Suits",
+      "Socks",
+      "Sun Shirts",
+      "Two-Piece Swim"
+    ],
+    "Fanny Packs": [
+      "Signature Line",
+      "NCAA Fanny Packs"
+    ],
+    "Headwear": [
+      "Techmo Hats",
+      "Beanies",
+      "Buckets",
+      "Headbands"
+    ],
+    "Sunglasses": [
+      "Wood Shades",
+      "Visor Shades",
+      "Sun Blockers",
+      "High Rollers",
+      "Extra Lenses"
+    ],
+    "Brand Capsules": [
+      "S|S 2024",
+      "Pizza Tiger",
+      "Sassy Cat"
+    ]
+  },
+  "shipping": {
+    "fulfillment_location": "Denver, Colorado, USA",
+    "days": "Monday through Friday",
+    "cutoff_time": "5 PM EST",
+    "free_shipping_thresholds": {
+      "USA": "$50+",
+      "Canada": "$75+",
+      "International": "$100+"
+    }
+  },
+  "returns_exchanges": {
+    "general": "Free unlimited returns for store credit or exchanges within the USA",
+    "swimwear": "Cannot be returned or exchanged if removed from shrink-wrapped packaging"
+  },
+  "product_features": {
+    "Sunglasses": [
+      "UV400 protection",
+      "Polarized lenses",
+      "Wood shades from repurposed skateboards",
+      "Lifetime warranty on wood frames"
+    ],
+    "Stretch Shirts": [
+      "4-way stretch",
+      "Moisture-wicking",
+      "Unisex sizing",
+      "Polyester-spandex blend"
+    ]
+  },
+  "gift_cards": "Digital only, can be emailed directly to recipient",
+  "contact_support": "Support available via contact form. Topics: Shipping, Returns, Exchanges, Warranty",
+  "brand_identity": {
+    "style": "Retro-inspired, bold, playful, nostalgic",
+    "mission": "Products that start conversations, turn heads, and get compliments"
+  },
+  "dev_notes": {
+    "use_as": [
+      "Claude system prompt",
+      "vectorized knowledge base"
+    ],
+    "repo_path": "Place in /data or /config as knowledge_base.md, .txt, or .json",
+    "integration": "Reference during context setup or embed into RAG system",
+    "optional_future": "Automate ingestion or upgrade to vector DB (Pinecone, Weaviate)"
+  }
+}

@@ -1,62 +1,129 @@
-/**
- * Claude Service
- * Manages interactions with the Claude API
- */
 import { Anthropic } from "@anthropic-ai/sdk";
 import AppConfig from "./config.server";
 import systemPrompts from "../prompts/prompts.json";
+import fs from "fs/promises";
+import path from "path";
+import { parse as csvParse } from "csv-parse/sync";
 
 /**
- * Creates a Claude service instance
- * @param {string} apiKey - Claude API key
- * @returns {Object} Claude service with methods for interacting with Claude API
+ * Reads the knowledge base markdown content from file.
+ * @returns {Promise<string>}
+ */
+async function loadKnowledgeBaseMarkdown() {
+  const kbPath = path.resolve(process.cwd(), "../../data/knowedge-base/B_Fresh_Gear_Claude_AI_Prompt.md");
+  try {
+    const mdContent = await fs.readFile(kbPath, "utf-8");
+    return mdContent;
+  } catch (err) {
+    console.error("Error loading knowledge base markdown:", err);
+    return "";
+  }
+}
+
+/**
+ * Reads and parses CSV files to create context text.
+ * @param {string[]} csvFilePaths 
+ * @returns {Promise<string>}
+ */
+async function loadAndFormatCSVContext(csvFilePaths = []) {
+  let combinedContext = "";
+
+  for (const filePath of csvFilePaths) {
+    try {
+      const absPath = path.resolve(process.cwd(), filePath);
+      const csvRaw = await fs.readFile(absPath, "utf-8");
+      const records = csvParse(csvRaw, { columns: true });
+
+      combinedContext += `\n\nData from ${path.basename(filePath)}:\n`;
+
+      records.forEach((row, i) => {
+        combinedContext += `\n- Entry ${i + 1}:\n`;
+        for (const [key, value] of Object.entries(row)) {
+          combinedContext += `  - ${key}: ${value}\n`;
+        }
+      });
+    } catch (err) {
+      console.error(`Error reading/parsing CSV file ${filePath}:`, err);
+    }
+  }
+
+  return combinedContext;
+}
+
+/**
+ * Creates Claude service instance.
+ * @param {string} apiKey 
+ * @returns {Object}
  */
 export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
-  // Initialize Claude client
   const anthropic = new Anthropic({ apiKey });
 
   /**
-   * Streams a conversation with Claude
-   * @param {Object} params - Stream parameters
-   * @param {Array} params.messages - Conversation history
-   * @param {string} params.promptType - The type of system prompt to use
-   * @param {Array} params.tools - Available tools for Claude
-   * @param {Object} streamHandlers - Stream event handlers
-   * @param {Function} streamHandlers.onText - Handles text chunks
-   * @param {Function} streamHandlers.onMessage - Handles complete messages
-   * @param {Function} streamHandlers.onToolUse - Handles tool use requests
-   * @returns {Promise<Object>} The final message
+   * Get the system prompt content for a given prompt type
+   * Inject knowledge base markdown and CSV context if needed
+   * @param {string} promptType 
+   * @param {string[]} csvFiles 
+   * @returns {Promise<string>}
    */
-  const streamConversation = async ({ 
-    messages, 
-    promptType = AppConfig.api.defaultPromptType, 
-    tools 
-  }, streamHandlers) => {
-    // Get system prompt from configuration or use default
-    const systemInstruction = getSystemPrompt(promptType);
+  const getSystemPrompt = async (promptType, csvFiles = []) => {
+    let basePrompt = systemPrompts.systemPrompts[promptType]?.content || 
+      systemPrompts.systemPrompts[AppConfig.api.defaultPromptType].content;
 
-    // Create stream
+    if (promptType === "knowledgeBaseAssistant") {
+      const kbMd = await loadKnowledgeBaseMarkdown();
+      basePrompt = kbMd || basePrompt;
+
+      if (csvFiles.length === 0) {
+        // Default CSV files if none specified
+        csvFiles = [
+          "../../data/knowedge-base/customers_export_segmented.csv",
+          "../../data/knowedge-base/products_export_1.csv"
+        ];
+      }
+
+      const csvContext = await loadAndFormatCSVContext(csvFiles);
+      basePrompt += `\n\n---\n\nAdditional context from CSV data:${csvContext}`;
+    }
+
+    return basePrompt;
+  };
+
+  /**
+   * Stream conversation with Claude
+   * @param {Object} params 
+   * @param {Array} params.messages
+   * @param {string} params.promptType
+   * @param {Array} params.tools
+   * @param {string[]} params.csvFiles
+   * @param {Object} streamHandlers
+   * @returns {Promise<Object>}
+   */
+  const streamConversation = async ({
+    messages,
+    promptType = AppConfig.api.defaultPromptType,
+    tools,
+    csvFiles = []
+  }, streamHandlers) => {
+    const systemInstruction = await getSystemPrompt(promptType, csvFiles);
+
     const stream = await anthropic.messages.stream({
       model: AppConfig.api.defaultModel,
       max_tokens: AppConfig.api.maxTokens,
       system: systemInstruction,
       messages,
-      tools: tools && tools.length > 0 ? tools : undefined
+      tools: tools && tools.length > 0 ? tools : undefined,
     });
 
-    // Set up event handlers
     if (streamHandlers.onText) {
-      stream.on('text', streamHandlers.onText);
+      stream.on("text", streamHandlers.onText);
     }
 
     if (streamHandlers.onMessage) {
-      stream.on('message', streamHandlers.onMessage);
+      stream.on("message", streamHandlers.onMessage);
     }
 
-    // Wait for final message
     const finalMessage = await stream.finalMessage();
-    
-    // Process tool use requests
+
     if (streamHandlers.onToolUse && finalMessage.content) {
       for (const content of finalMessage.content) {
         if (content.type === "tool_use") {
@@ -68,22 +135,12 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
     return finalMessage;
   };
 
-  /**
-   * Gets the system prompt content for a given prompt type
-   * @param {string} promptType - The prompt type to retrieve
-   * @returns {string} The system prompt content
-   */
-  const getSystemPrompt = (promptType) => {
-    return systemPrompts.systemPrompts[promptType]?.content || 
-      systemPrompts.systemPrompts[AppConfig.api.defaultPromptType].content;
-  };
-
   return {
     streamConversation,
-    getSystemPrompt
+    getSystemPrompt,
   };
 }
 
 export default {
-  createClaudeService
+  createClaudeService,
 };
