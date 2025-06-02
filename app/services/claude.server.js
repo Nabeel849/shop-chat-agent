@@ -6,16 +6,16 @@ import path from "path";
 import { parse as csvParse } from "csv-parse/sync";
 
 /**
- * Reads the knowledge base markdown content from file.
+ * Reads the knowledge base content from file.
  * @returns {Promise<string>}
  */
 async function loadKnowledgeBaseMarkdown() {
-  const kbPath = path.resolve(process.cwd(), "../../data/knowedge-base/B_Fresh_Gear_Claude_AI_Prompt.md");
+  const kbPath = path.resolve(process.cwd(), "../../data/knowledge-base/B_Fresh_Gear_Claude_AI_Prompt.txt");
   try {
     const mdContent = await fs.readFile(kbPath, "utf-8");
     return mdContent;
   } catch (err) {
-    console.error("Error loading knowledge base markdown:", err);
+    console.error("Error loading knowledge base:", err);
     return "";
   }
 }
@@ -51,6 +51,40 @@ async function loadAndFormatCSVContext(csvFilePaths = []) {
 }
 
 /**
+ * Reads and parses JSON knowledge base.
+ * @param {string} jsonFilePath 
+ * @returns {Promise<Object[] | null>}
+ */
+async function loadJsonKnowledgeBase(jsonFilePath) {
+  try {
+    const absPath = path.resolve(process.cwd(), jsonFilePath);
+    const jsonData = await fs.readFile(absPath, "utf-8");
+    return JSON.parse(jsonData);
+  } catch (err) {
+    console.error(`Error loading JSON knowledge base from ${jsonFilePath}:`, err);
+    return null;
+  }
+}
+
+/**
+ * Formats JSON knowledge base data into readable text.
+ * @param {Object[]} jsonData 
+ * @returns {string}
+ */
+function formatJsonContext(jsonData) {
+  if (!jsonData) return "";
+
+  let context = "\n\nAdditional JSON Knowledge Base:\n";
+  jsonData.forEach((item, i) => {
+    context += `\n- Entry ${i + 1}:\n`;
+    for (const [key, val] of Object.entries(item)) {
+      context += `  - ${key}: ${val}\n`;
+    }
+  });
+  return context;
+}
+
+/**
  * Creates Claude service instance.
  * @param {string} apiKey 
  * @returns {Object}
@@ -60,12 +94,13 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
 
   /**
    * Get the system prompt content for a given prompt type
-   * Inject knowledge base markdown and CSV context if needed
+   * Inject knowledge base markdown, CSV context and JSON context if needed
    * @param {string} promptType 
    * @param {string[]} csvFiles 
+   * @param {string} jsonFilePath
    * @returns {Promise<string>}
    */
-  const getSystemPrompt = async (promptType, csvFiles = []) => {
+  const getSystemPrompt = async (promptType, csvFiles = [], jsonFilePath = "") => {
     let basePrompt = systemPrompts.systemPrompts[promptType]?.content || 
       systemPrompts.systemPrompts[AppConfig.api.defaultPromptType].content;
 
@@ -76,13 +111,19 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
       if (csvFiles.length === 0) {
         // Default CSV files if none specified
         csvFiles = [
-          "../../data/knowedge-base/customers_export_segmented.csv",
-          "../../data/knowedge-base/products_export_1.csv"
+          "../../data/knowledge-base/customers_export_segmented.csv",
+          "../../data/knowledge-base/products_export_1.csv"
         ];
       }
 
       const csvContext = await loadAndFormatCSVContext(csvFiles);
       basePrompt += `\n\n---\n\nAdditional context from CSV data:${csvContext}`;
+
+      if (jsonFilePath) {
+        const jsonKB = await loadJsonKnowledgeBase(jsonFilePath);
+        const jsonContext = formatJsonContext(jsonKB);
+        basePrompt += jsonContext;
+      }
     }
 
     return basePrompt;
@@ -95,6 +136,7 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
    * @param {string} params.promptType
    * @param {Array} params.tools
    * @param {string[]} params.csvFiles
+   * @param {string} params.jsonFilePath
    * @param {Object} streamHandlers
    * @returns {Promise<Object>}
    */
@@ -102,9 +144,10 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
     messages,
     promptType = AppConfig.api.defaultPromptType,
     tools,
-    csvFiles = []
+    csvFiles = [],
+    jsonFilePath = ""
   }, streamHandlers) => {
-    const systemInstruction = await getSystemPrompt(promptType, csvFiles);
+    const systemInstruction = await getSystemPrompt(promptType, csvFiles, jsonFilePath);
 
     const stream = await anthropic.messages.stream({
       model: AppConfig.api.defaultModel,
