@@ -2,32 +2,38 @@
  * Claude Service
  * Manages interactions with the Claude API
  */
+
 import { Anthropic } from "@anthropic-ai/sdk";
 import fs from "fs";
-import path from "path";
 import { parse } from "csv-parse/sync";
 import AppConfig from "./config.server";
 import systemPrompts from "../prompts/prompts.json";
 import { fileURLToPath } from "url";
+import path from "path";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load B Fresh Gear knowledge base JSON from prompts folder
-const knowledgeBasePath = path.resolve(__dirname, "../prompts/bfreshgear_knowledge_base.json");
+// Calculate project root (one level up from build folder)
+const projectRoot = path.resolve(__dirname, "..");
+
+// Paths to your knowledge base and CSV files inside app/prompts
+const knowledgeBasePath = path.resolve(projectRoot, "app/prompts/bfreshgear_knowledge_base.json");
+const productsCSVPath = path.resolve(projectRoot, "app/prompts/products_export_1.csv");
+const customersCSVPath = path.resolve(projectRoot, "app/prompts/customers_export_segmented.csv");
+
+// Read & parse knowledge base JSON
 const knowledgeBaseRaw = fs.readFileSync(knowledgeBasePath, "utf-8");
 const breshgearKnowledgeBase = JSON.parse(knowledgeBaseRaw);
 
-// Load and parse products_export_1.csv from prompts folder
-const productsCSVPath = path.resolve(__dirname, "../prompts/products_export_1.csv");
+// Read & parse products CSV
 const productsCSVRaw = fs.readFileSync(productsCSVPath, "utf-8");
 const productsData = parse(productsCSVRaw, {
   columns: true,
   skip_empty_lines: true,
 });
 
-// Load and parse customers_export_segmented.csv from prompts folder
-const customersCSVPath = path.resolve(__dirname, "../prompts/customers_export_segmented.csv");
+// Read & parse customers CSV
 const customersCSVRaw = fs.readFileSync(customersCSVPath, "utf-8");
 const customersData = parse(customersCSVRaw, {
   columns: true,
@@ -63,6 +69,7 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
     const systemInstruction = getSystemPrompt(promptType);
 
     // Inject B Fresh Gear knowledge base and CSV data as extra context or tools
+    // You can customize this embedding depending on your system needs
     const enhancedTools = [
       ...tools,
       {
@@ -95,6 +102,7 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
     if (streamHandlers.onText) {
       stream.on("text", streamHandlers.onText);
     }
+
     if (streamHandlers.onMessage) {
       stream.on("message", streamHandlers.onMessage);
     }
