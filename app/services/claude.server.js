@@ -10,7 +10,7 @@ import AppConfig from "./config.server";
 import systemPrompts from "../prompts/prompts.json";
 
 // Load B Fresh Gear knowledge base JSON
-const knowledgeBasePath = path.resolve("../knowledge-base/breshgear_knowledge_base.json");
+const knowledgeBasePath = path.resolve("../knowledge-base/bfreshgear_knowledge_base.json");
 const knowledgeBaseRaw = fs.readFileSync(knowledgeBasePath, "utf-8");
 const breshgearKnowledgeBase = JSON.parse(knowledgeBaseRaw);
 
