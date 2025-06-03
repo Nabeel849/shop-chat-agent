@@ -2,7 +2,6 @@
  * Claude Service
  * Manages interactions with the Claude API
  */
-
 import { Anthropic } from "@anthropic-ai/sdk";
 import fs from "fs";
 import { parse } from "csv-parse/sync";
@@ -14,26 +13,23 @@ import path from "path";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Calculate project root (one level up from build folder)
-const projectRoot = path.resolve(__dirname, "..");
+// Paths relative to build folder (__dirname points to build)
+const knowledgeBasePath = path.resolve(__dirname, "../app/prompts/bfreshgear_knowledge_base.json");
+const productsCSVPath = path.resolve(__dirname, "../app/prompts/products_export_1.csv");
+const customersCSVPath = path.resolve(__dirname, "../app/prompts/customers_export_segmented.csv");
 
-// Paths to your knowledge base and CSV files inside app/prompts
-const knowledgeBasePath = path.resolve(projectRoot, "app/prompts/bfreshgear_knowledge_base.json");
-const productsCSVPath = path.resolve(projectRoot, "app/prompts/products_export_1.csv");
-const customersCSVPath = path.resolve(projectRoot, "app/prompts/customers_export_segmented.csv");
-
-// Read & parse knowledge base JSON
+// Read and parse knowledge base JSON
 const knowledgeBaseRaw = fs.readFileSync(knowledgeBasePath, "utf-8");
 const breshgearKnowledgeBase = JSON.parse(knowledgeBaseRaw);
 
-// Read & parse products CSV
+// Read and parse products CSV
 const productsCSVRaw = fs.readFileSync(productsCSVPath, "utf-8");
 const productsData = parse(productsCSVRaw, {
   columns: true,
   skip_empty_lines: true,
 });
 
-// Read & parse customers CSV
+// Read and parse customers CSV
 const customersCSVRaw = fs.readFileSync(customersCSVPath, "utf-8");
 const customersData = parse(customersCSVRaw, {
   columns: true,
@@ -46,7 +42,6 @@ const customersData = parse(customersCSVRaw, {
  * @returns {Object} Claude service with methods for interacting with Claude API
  */
 export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
-  // Initialize Claude client
   const anthropic = new Anthropic({ apiKey });
 
   /**
@@ -65,11 +60,9 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
     { messages, promptType = AppConfig.api.defaultPromptType, tools = [] },
     streamHandlers
   ) => {
-    // Get system prompt from configuration or use default
     const systemInstruction = getSystemPrompt(promptType);
 
-    // Inject B Fresh Gear knowledge base and CSV data as extra context or tools
-    // You can customize this embedding depending on your system needs
+    // Inject knowledge base and CSV data as tools
     const enhancedTools = [
       ...tools,
       {
@@ -89,7 +82,6 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
       },
     ];
 
-    // Create stream
     const stream = await anthropic.messages.stream({
       model: AppConfig.api.defaultModel,
       max_tokens: AppConfig.api.maxTokens,
@@ -98,19 +90,15 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
       tools: enhancedTools.length > 0 ? enhancedTools : undefined,
     });
 
-    // Set up event handlers
     if (streamHandlers.onText) {
       stream.on("text", streamHandlers.onText);
     }
-
     if (streamHandlers.onMessage) {
       stream.on("message", streamHandlers.onMessage);
     }
 
-    // Wait for final message
     const finalMessage = await stream.finalMessage();
 
-    // Process tool use requests
     if (streamHandlers.onToolUse && finalMessage.content) {
       for (const content of finalMessage.content) {
         if (content.type === "tool_use") {
