@@ -4,36 +4,34 @@
  */
 import { Anthropic } from "@anthropic-ai/sdk";
 import fs from "fs";
+import path from "path";
 import { parse } from "csv-parse/sync";
 import AppConfig from "./config.server";
 import systemPrompts from "../prompts/prompts.json";
-import { fileURLToPath } from 'url';
-import path from 'path';
+import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-
-// Load B Fresh Gear knowledge base JSON
-const projectRoot = path.resolve(__dirname, "../../");
-const knowledgeBasePath = path.join(projectRoot, "knowledge-base/bfreshgear_knowledge_base.json");
+// Load B Fresh Gear knowledge base JSON from prompts folder
+const knowledgeBasePath = path.resolve(__dirname, "../prompts/bfreshgear_knowledge_base.json");
 const knowledgeBaseRaw = fs.readFileSync(knowledgeBasePath, "utf-8");
 const breshgearKnowledgeBase = JSON.parse(knowledgeBaseRaw);
 
-// Load and parse products_export_1.csv
-const productsCSVPath = path.join(projectRoot, "knowledge-base/products_export_1.csv");
+// Load and parse products_export_1.csv from prompts folder
+const productsCSVPath = path.resolve(__dirname, "../prompts/products_export_1.csv");
 const productsCSVRaw = fs.readFileSync(productsCSVPath, "utf-8");
 const productsData = parse(productsCSVRaw, {
   columns: true,
-  skip_empty_lines: true
+  skip_empty_lines: true,
 });
 
-// Load and parse customers_export_segmented.csv
-const customersCSVPath = path.join(projectRoot, "knowledge-base/customers_export_segmented.csv");
+// Load and parse customers_export_segmented.csv from prompts folder
+const customersCSVPath = path.resolve(__dirname, "../prompts/customers_export_segmented.csv");
 const customersCSVRaw = fs.readFileSync(customersCSVPath, "utf-8");
 const customersData = parse(customersCSVRaw, {
   columns: true,
-  skip_empty_lines: true
+  skip_empty_lines: true,
 });
 
 /**
@@ -57,33 +55,31 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
    * @param {Function} streamHandlers.onToolUse - Handles tool use requests
    * @returns {Promise<Object>} The final message
    */
-  const streamConversation = async ({
-    messages,
-    promptType = AppConfig.api.defaultPromptType,
-    tools = []
-  }, streamHandlers) => {
+  const streamConversation = async (
+    { messages, promptType = AppConfig.api.defaultPromptType, tools = [] },
+    streamHandlers
+  ) => {
     // Get system prompt from configuration or use default
     const systemInstruction = getSystemPrompt(promptType);
 
     // Inject B Fresh Gear knowledge base and CSV data as extra context or tools
-    // You can customize this embedding depending on your system needs
     const enhancedTools = [
       ...tools,
       {
         name: "bfreshgear_knowledge_base",
         description: "Knowledge base for B Fresh Gear brand, products, and policies.",
-        content: JSON.stringify(breshgearKnowledgeBase)
+        content: JSON.stringify(breshgearKnowledgeBase),
       },
       {
         name: "products_data",
         description: "CSV data for products export from B Fresh Gear store.",
-        content: JSON.stringify(productsData)
+        content: JSON.stringify(productsData),
       },
       {
         name: "customers_segmented_data",
         description: "CSV data for segmented customers from B Fresh Gear store.",
-        content: JSON.stringify(customersData)
-      }
+        content: JSON.stringify(customersData),
+      },
     ];
 
     // Create stream
@@ -92,14 +88,13 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
       max_tokens: AppConfig.api.maxTokens,
       system: systemInstruction,
       messages,
-      tools: enhancedTools.length > 0 ? enhancedTools : undefined
+      tools: enhancedTools.length > 0 ? enhancedTools : undefined,
     });
 
     // Set up event handlers
     if (streamHandlers.onText) {
       stream.on("text", streamHandlers.onText);
     }
-
     if (streamHandlers.onMessage) {
       stream.on("message", streamHandlers.onMessage);
     }
@@ -133,10 +128,10 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
 
   return {
     streamConversation,
-    getSystemPrompt
+    getSystemPrompt,
   };
 }
 
 export default {
-  createClaudeService
+  createClaudeService,
 };
