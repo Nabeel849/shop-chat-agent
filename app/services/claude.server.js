@@ -15,12 +15,13 @@ const __dirname = path.dirname(__filename);
 
 
 // Load B Fresh Gear knowledge base JSON
-const knowledgeBasePath = path.resolve(__dirname,"../knowledge-base/bfreshgear_knowledge_base.json");
+const projectRoot = path.resolve(__dirname, "../../");
+const knowledgeBasePath = path.join(projectRoot, "knowledge-base/bfreshgear_knowledge_base.json");
 const knowledgeBaseRaw = fs.readFileSync(knowledgeBasePath, "utf-8");
 const breshgearKnowledgeBase = JSON.parse(knowledgeBaseRaw);
 
 // Load and parse products_export_1.csv
-const productsCSVPath = path.resolve(__dirname,"../knowledge-base/products_export_1.csv");
+const productsCSVPath = path.join(projectRoot, "knowledge-base/products_export_1.csv");
 const productsCSVRaw = fs.readFileSync(productsCSVPath, "utf-8");
 const productsData = parse(productsCSVRaw, {
   columns: true,
@@ -28,7 +29,7 @@ const productsData = parse(productsCSVRaw, {
 });
 
 // Load and parse customers_export_segmented.csv
-const customersCSVPath = path.resolve(__dirname,"../knowledge-base/customers_export_segmented.csv");
+const customersCSVPath = path.join(projectRoot, "knowledge-base/customers_export_segmented.csv");
 const customersCSVRaw = fs.readFileSync(customersCSVPath, "utf-8");
 const customersData = parse(customersCSVRaw, {
   columns: true,
