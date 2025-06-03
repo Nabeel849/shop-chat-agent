@@ -1,68 +1,50 @@
-/**
- * Claude Service
- * Manages interactions with the Claude API
- */
 import { Anthropic } from "@anthropic-ai/sdk";
 import fs from "fs";
 import { parse } from "csv-parse/sync";
-import AppConfig from "./config.server";
-import systemPrompts from "../prompts/prompts.json";
+import AppConfig from "../config.server.js";
+import systemPrompts from "../prompts/prompts.json" assert { type: "json" };
 import { fileURLToPath } from "url";
 import path from "path";
 
+// Get current filename and directory in ESM
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Paths relative to build folder (__dirname points to build)
-const knowledgeBasePath = path.resolve(__dirname, "../app/prompts/bfreshgear_knowledge_base.json");
-const productsCSVPath = path.resolve(__dirname, "../app/prompts/products_export_1.csv");
-const customersCSVPath = path.resolve(__dirname, "../app/prompts/customers_export_segmented.csv");
+// Paths relative to app/services/ --> go up one, then into prompts/
+const knowledgeBasePath = path.resolve(__dirname, "../prompts/bfreshgear_knowledge_base.json");
+const productsCSVPath = path.resolve(__dirname, "../prompts/products_export_1.csv");
+const customersCSVPath = path.resolve(__dirname, "../prompts/customers_export_segmented.csv");
 
-// Read and parse knowledge base JSON
+// Read and parse files
 const knowledgeBaseRaw = fs.readFileSync(knowledgeBasePath, "utf-8");
 const breshgearKnowledgeBase = JSON.parse(knowledgeBaseRaw);
 
-// Read and parse products CSV
 const productsCSVRaw = fs.readFileSync(productsCSVPath, "utf-8");
 const productsData = parse(productsCSVRaw, {
   columns: true,
   skip_empty_lines: true,
 });
 
-// Read and parse customers CSV
 const customersCSVRaw = fs.readFileSync(customersCSVPath, "utf-8");
 const customersData = parse(customersCSVRaw, {
   columns: true,
   skip_empty_lines: true,
 });
 
-/**
- * Creates a Claude service instance
- * @param {string} apiKey - Claude API key
- * @returns {Object} Claude service with methods for interacting with Claude API
- */
+// Claude service factory
 export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
   const anthropic = new Anthropic({ apiKey });
 
-  /**
-   * Streams a conversation with Claude
-   * @param {Object} params - Stream parameters
-   * @param {Array} params.messages - Conversation history
-   * @param {string} params.promptType - The type of system prompt to use
-   * @param {Array} params.tools - Available tools for Claude
-   * @param {Object} streamHandlers - Stream event handlers
-   * @param {Function} streamHandlers.onText - Handles text chunks
-   * @param {Function} streamHandlers.onMessage - Handles complete messages
-   * @param {Function} streamHandlers.onToolUse - Handles tool use requests
-   * @returns {Promise<Object>} The final message
-   */
   const streamConversation = async (
-    { messages, promptType = AppConfig.api.defaultPromptType, tools = [] },
+    {
+      messages,
+      promptType = AppConfig.api.defaultPromptType,
+      tools = [],
+    },
     streamHandlers
   ) => {
     const systemInstruction = getSystemPrompt(promptType);
 
-    // Inject knowledge base and CSV data as tools
     const enhancedTools = [
       ...tools,
       {
@@ -93,6 +75,7 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
     if (streamHandlers.onText) {
       stream.on("text", streamHandlers.onText);
     }
+
     if (streamHandlers.onMessage) {
       stream.on("message", streamHandlers.onMessage);
     }
@@ -110,11 +93,6 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
     return finalMessage;
   };
 
-  /**
-   * Gets the system prompt content for a given prompt type
-   * @param {string} promptType - The prompt type to retrieve
-   * @returns {string} The system prompt content
-   */
   const getSystemPrompt = (promptType) => {
     return (
       systemPrompts.systemPrompts[promptType]?.content ||
