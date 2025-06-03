@@ -4,10 +4,15 @@
  */
 import { Anthropic } from "@anthropic-ai/sdk";
 import fs from "fs";
-import path from "path";
 import { parse } from "csv-parse/sync";
 import AppConfig from "./config.server";
 import systemPrompts from "../prompts/prompts.json";
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 
 // Load B Fresh Gear knowledge base JSON
 const knowledgeBasePath = path.resolve(__dirname,"../knowledge-base/bfreshgear_knowledge_base.json");
