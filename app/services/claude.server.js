@@ -1,87 +1,62 @@
+/**
+ * Claude Service
+ * Manages interactions with the Claude API
+ */
 import { Anthropic } from "@anthropic-ai/sdk";
-import fs from "fs";
-import { parse } from "csv-parse/sync";
-import AppConfig from "../config.server.js";
-import systemPrompts from "../prompts/prompts.json" assert { type: "json" };
-import { fileURLToPath } from "url";
-import path from "path";
+import AppConfig from "./config.server";
+import systemPrompts from "../prompts/prompts.json";
 
-// Get current filename and directory in ESM
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Paths relative to app/services/ --> go up one, then into prompts/
-const knowledgeBasePath = path.resolve(__dirname, "../prompts/bfreshgear_knowledge_base.json");
-const productsCSVPath = path.resolve(__dirname, "../prompts/products_export_1.csv");
-const customersCSVPath = path.resolve(__dirname, "../prompts/customers_export_segmented.csv");
-
-// Read and parse files
-const knowledgeBaseRaw = fs.readFileSync(knowledgeBasePath, "utf-8");
-const breshgearKnowledgeBase = JSON.parse(knowledgeBaseRaw);
-
-const productsCSVRaw = fs.readFileSync(productsCSVPath, "utf-8");
-const productsData = parse(productsCSVRaw, {
-  columns: true,
-  skip_empty_lines: true,
-});
-
-const customersCSVRaw = fs.readFileSync(customersCSVPath, "utf-8");
-const customersData = parse(customersCSVRaw, {
-  columns: true,
-  skip_empty_lines: true,
-});
-
-// Claude service factory
+/**
+ * Creates a Claude service instance
+ * @param {string} apiKey - Claude API key
+ * @returns {Object} Claude service with methods for interacting with Claude API
+ */
 export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
+  // Initialize Claude client
   const anthropic = new Anthropic({ apiKey });
 
-  const streamConversation = async (
-    {
-      messages,
-      promptType = AppConfig.api.defaultPromptType,
-      tools = [],
-    },
-    streamHandlers
-  ) => {
+  /**
+   * Streams a conversation with Claude
+   * @param {Object} params - Stream parameters
+   * @param {Array} params.messages - Conversation history
+   * @param {string} params.promptType - The type of system prompt to use
+   * @param {Array} params.tools - Available tools for Claude
+   * @param {Object} streamHandlers - Stream event handlers
+   * @param {Function} streamHandlers.onText - Handles text chunks
+   * @param {Function} streamHandlers.onMessage - Handles complete messages
+   * @param {Function} streamHandlers.onToolUse - Handles tool use requests
+   * @returns {Promise<Object>} The final message
+   */
+  const streamConversation = async ({ 
+    messages, 
+    promptType = AppConfig.api.defaultPromptType, 
+    tools 
+  }, streamHandlers) => {
+    // Get system prompt from configuration or use default
     const systemInstruction = getSystemPrompt(promptType);
 
-    const enhancedTools = [
-      ...tools,
-      {
-        name: "bfreshgear_knowledge_base",
-        description: "Knowledge base for B Fresh Gear brand, products, and policies.",
-        content: JSON.stringify(breshgearKnowledgeBase),
-      },
-      {
-        name: "products_data",
-        description: "CSV data for products export from B Fresh Gear store.",
-        content: JSON.stringify(productsData),
-      },
-      {
-        name: "customers_segmented_data",
-        description: "CSV data for segmented customers from B Fresh Gear store.",
-        content: JSON.stringify(customersData),
-      },
-    ];
-
+    // Create stream
     const stream = await anthropic.messages.stream({
       model: AppConfig.api.defaultModel,
       max_tokens: AppConfig.api.maxTokens,
       system: systemInstruction,
       messages,
-      tools: enhancedTools.length > 0 ? enhancedTools : undefined,
+      tools: tools && tools.length > 0 ? tools : undefined
     });
 
+    // Set up event handlers
     if (streamHandlers.onText) {
-      stream.on("text", streamHandlers.onText);
+      stream.on('text', streamHandlers.onText);
     }
 
     if (streamHandlers.onMessage) {
-      stream.on("message", streamHandlers.onMessage);
+      stream.on('message', streamHandlers.onMessage);
     }
 
+    // Wait for final message
     const finalMessage = await stream.finalMessage();
-
+    
+    // Process tool use requests
     if (streamHandlers.onToolUse && finalMessage.content) {
       for (const content of finalMessage.content) {
         if (content.type === "tool_use") {
@@ -93,19 +68,22 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
     return finalMessage;
   };
 
+  /**
+   * Gets the system prompt content for a given prompt type
+   * @param {string} promptType - The prompt type to retrieve
+   * @returns {string} The system prompt content
+   */
   const getSystemPrompt = (promptType) => {
-    return (
-      systemPrompts.systemPrompts[promptType]?.content ||
-      systemPrompts.systemPrompts[AppConfig.api.defaultPromptType].content
-    );
+    return systemPrompts.systemPrompts[promptType]?.content || 
+      systemPrompts.systemPrompts[AppConfig.api.defaultPromptType].content;
   };
 
   return {
     streamConversation,
-    getSystemPrompt,
+    getSystemPrompt
   };
 }
 
 export default {
-  createClaudeService,
+  createClaudeService
 };
