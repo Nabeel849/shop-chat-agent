@@ -10,12 +10,12 @@ import AppConfig from "./config.server";
 import systemPrompts from "../prompts/prompts.json";
 
 // Load B Fresh Gear knowledge base JSON
-const knowledgeBasePath = path.resolve("../knowledge-base/bfreshgear_knowledge_base.json");
+const knowledgeBasePath = path.resolve(__dirname,"../knowledge-base/bfreshgear_knowledge_base.json");
 const knowledgeBaseRaw = fs.readFileSync(knowledgeBasePath, "utf-8");
 const breshgearKnowledgeBase = JSON.parse(knowledgeBaseRaw);
 
 // Load and parse products_export_1.csv
-const productsCSVPath = path.resolve("../knowledge-base/products_export_1.csv");
+const productsCSVPath = path.resolve(__dirname,"../knowledge-base/products_export_1.csv");
 const productsCSVRaw = fs.readFileSync(productsCSVPath, "utf-8");
 const productsData = parse(productsCSVRaw, {
   columns: true,
@@ -23,7 +23,7 @@ const productsData = parse(productsCSVRaw, {
 });
 
 // Load and parse customers_export_segmented.csv
-const customersCSVPath = path.resolve("../knowledge-base/customers_export_segmented.csv");
+const customersCSVPath = path.resolve(__dirname,"../knowledge-base/customers_export_segmented.csv");
 const customersCSVRaw = fs.readFileSync(customersCSVPath, "utf-8");
 const customersData = parse(customersCSVRaw, {
   columns: true,
@@ -64,7 +64,7 @@ export function createClaudeService(apiKey = process.env.CLAUDE_API_KEY) {
     const enhancedTools = [
       ...tools,
       {
-        name: "breshgear_knowledge_base",
+        name: "bfreshgear_knowledge_base",
         description: "Knowledge base for B Fresh Gear brand, products, and policies.",
         content: JSON.stringify(breshgearKnowledgeBase)
       },
